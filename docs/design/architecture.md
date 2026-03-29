@@ -1,11 +1,48 @@
 # Architecture — workflow-builder
 
+## Core Thesis
+
+LLM as an autonomous agent is **probabilistic** — the same prompt may
+produce different outputs on each run, and those outputs may or may not
+be correct. This makes LLM-driven task execution unreliable when used
+directly (e.g. "run this agent every day at 07:00").
+
+workflow-builder addresses this by **separating the probabilistic phase
+from the deterministic phase:**
+
+```
+Probabilistic Phase                 Deterministic Phase
+(LLM, human-in-the-loop)           (shell script, cron, CI)
+
+  Task description                    Compiled workflow
+  + Tool registry                     = shell script
+  + CoT planning          ──compile──→   that runs the same way
+  + Script generation                    every time,
+  + Execution feedback                   with no LLM involvement
+  + Human approval                       at runtime.
+```
+
+The LLM is used **at build time** (design, planning, code generation,
+debugging) but is **absent at run time**. The output is a conventional
+shell script — fully deterministic, auditable, version-controllable,
+and executable without any AI dependency.
+
+This is analogous to how a compiler transforms high-level source code
+into machine code: the compilation step may involve complex heuristics,
+but the resulting binary runs predictably.
+
+**In short: use the LLM to compile workflows, not to execute them.**
+
+---
+
 ## Overview
 
-workflow-builder is an LLM-powered system that generates executable shell
-scripts from natural language task descriptions. It uses a structured tool
-registry to understand available CLI tools, plans data flows between them,
-and iteratively refines the generated script through execution feedback.
+workflow-builder is a system that uses an LLM to generate executable
+shell scripts from natural language task descriptions. It uses a structured
+tool registry to understand available CLI tools, plans data flows between
+them, and iteratively refines the generated script through containerized
+execution and human feedback — until the workflow is proven correct and
+ready for autonomous, LLM-free operation.
 
 ## Components
 

@@ -6,6 +6,19 @@ An LLM-powered workflow builder that generates executable shell scripts from nat
 
 [日本語版 README はこちら](README.ja.md)
 
+## Thesis
+
+LLM agents are probabilistic — the same prompt may produce different results
+each time. This makes direct LLM-driven task execution unreliable for
+recurring or mission-critical workflows.
+
+workflow-builder solves this by **using the LLM at build time, not at run time.**
+The LLM plans, generates, and debugs a shell script through iterative feedback.
+Once the script works correctly, it becomes a deterministic, auditable workflow
+that runs without any LLM involvement — just like compiled code.
+
+> **Compile workflows from natural language, then run them deterministically.**
+
 ## Concept
 
 ```
