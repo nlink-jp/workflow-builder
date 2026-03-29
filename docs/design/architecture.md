@@ -208,17 +208,198 @@ Generated script:
 
 ## Security Considerations
 
+### Container isolation
+
 - Generated scripts run **inside a container**, not on the host
-- Container has **no network access by default** (opt-in via flag)
-- Input/output via **mounted volumes** only
-- API credentials passed via **environment variables** (not baked into image)
-- Scripts are **logged and reviewable** before execution (dry-run mode)
+- Input/output via **mounted volumes** only (`/workspace/input`, `/workspace/output`)
 - Execution has a **configurable timeout** (default: 5 minutes)
+
+### Credential management
+
+API credentials (Slack tokens, GCP service account keys, etc.) are
+**never baked into the container image**. They are injected at container
+startup via environment variables or mounted secret files:
+
+```bash
+podman run --rm \
+  -e SWRITE_TOKEN="$(cat ~/.secrets/slack-token)" \
+  -e GOOGLE_CLOUD_PROJECT="my-project" \
+  -v ./workspace:/workspace \
+  workflow-builder-toolbox /workspace/my-workflow.sh
+```
+
+The orchestrator must ensure credentials are passed only to containers
+that need them, and only for the duration of execution.
+
+### Network access control
+
+By default, containers run with **no network access** (`--network=none`).
+Tools that require external API calls (e.g. `gem-cli`, `swrite`,
+`news-collector`) need network access explicitly enabled.
+
+To support this, the tool registry includes a `requires_network` flag:
+
+```yaml
+name: gem-cli
+requires_network: true    # needs Vertex AI API access
+
+name: rex
+requires_network: false   # pure local text processing
+```
+
+The orchestrator inspects all tools used in the generated script and
+enables network access **only if at least one tool requires it**.
+This minimizes the attack surface of scripts that only do local
+data transformation.
+
+### Script review and approval
+
+All generated scripts support a **dry-run mode** where the script is
+displayed for human review before execution. For destructive operations
+(file deletion, external API writes, mass posting), the orchestrator
+requires explicit human approval before proceeding.
+
+---
+
+## Idempotency and Reliability
+
+### Idempotent script generation
+
+For workflows intended for recurring execution (cron, scheduled jobs),
+the orchestrator instructs the LLM to generate **idempotent scripts** —
+scripts that produce the same result whether run once or multiple times:
+
+- Use `INSERT OR IGNORE` / dedup patterns for data storage
+- Check for existing output before regenerating
+- Use atomic file operations (write to temp, then move)
+
+The system prompt for the LLM coder includes idempotency requirements
+when the user indicates the workflow will run on a schedule.
+
+### Intermediate file management
+
+Generated scripts use a structured workspace layout:
+
+```
+/workspace/
+  input/          ← mounted read-only input data
+  output/         ← final results (persisted)
+  tmp/            ← intermediate files (cleaned up on exit)
+```
+
+The orchestrator wraps generated scripts with a cleanup trap:
+
+```bash
+trap 'rm -rf /workspace/tmp' EXIT
+```
+
+---
+
+## Human-in-the-Loop
+
+### Approval workflow
+
+```
+LLM generates script
+        │
+        ▼
+   ┌─────────┐      ┌─────────────┐
+   │ Dry run  │──→──│ Human review │
+   │ (preview)│      │ Approve?    │
+   └─────────┘      └──────┬──────┘
+                        │       │
+                    [approve] [reject + feedback]
+                        │       │
+                        ▼       ▼
+                    Execute   Regenerate
+                              with feedback
+```
+
+The orchestrator provides:
+
+1. **`--dry-run`**: show the generated script without executing
+2. **`--approve`**: require explicit "yes" before execution
+3. **Risk classification**: tag scripts as low/medium/high risk based on
+   operations used (read-only vs. write vs. delete vs. external API)
+
+### Risk levels
+
+| Level | Operations | Approval |
+|---|---|---|
+| Low | Local read, text processing, format conversion | Auto-approve |
+| Medium | File creation, local DB writes | Prompt for confirmation |
+| High | External API calls, file deletion, mass posting | Require explicit approval |
+
+---
+
+## Tool Registry Extensions
+
+### `requires_network` flag
+
+```yaml
+requires_network: true   # tool needs external API access
+```
+
+Used by the orchestrator to determine container network policy.
+
+### Auto-generation from `--help`
+
+Future: a subcommand that reads a tool's `--help` output and generates
+a draft `tools/*.yaml` definition:
+
+```bash
+workflow-builder registry generate --from-help "gem-cli --help"
+```
+
+This accelerates onboarding of new tools into the ecosystem.
+
+---
+
+## Testing and Validation
+
+### Test fixture generation
+
+When compiling a workflow, the LLM also generates:
+
+1. **Sample input data** — minimal test fixtures for the workflow
+2. **Expected output** — what the workflow should produce
+3. **Validation script** — a companion script that checks the output
+
+This enables automated regression testing of compiled workflows:
+
+```bash
+# Run the workflow with test fixtures
+./my-workflow.sh < test-input.json > actual-output.json
+
+# Validate
+./my-workflow.test.sh actual-output.json expected-output.json
+```
+
+### Workflow versioning
+
+Compiled workflows are stored with metadata:
+
+```
+workflows/
+  news-digest/
+    v1.sh              ← compiled script
+    v1.meta.yaml       ← task description, tool versions, generation date
+    v1.test-input/     ← test fixtures
+    v1.expected-output/ ← expected results
+```
+
+---
 
 ## Future Directions
 
-- **Workflow library**: save and share proven workflows
+- **Workflow library**: save, share, and discover proven workflows
 - **Parameterized workflows**: templates with variable substitution
-- **Scheduled execution**: cron-like recurring workflow runs
-- **Multi-step approval**: human-in-the-loop before execution
+  (`$CHANNEL`, `$DATE_RANGE`, etc.)
+- **Scheduled execution**: cron-like recurring workflow runs with
+  built-in idempotency verification
+- **Multi-user approval**: role-based approval for high-risk workflows
 - **Tool auto-discovery**: scan installed binaries and generate registry entries
+- **Workflow composition**: combine multiple compiled workflows into
+  larger pipelines
+- **Execution analytics**: track success rates, execution times, and
+  failure patterns across workflow runs

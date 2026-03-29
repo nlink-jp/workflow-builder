@@ -3,6 +3,7 @@ version: "0.3.0"
 description: |
   Bot-oriented Slack posting CLI. Posts text, Block Kit messages, or files
   to Slack channels and DMs. Designed for pipeline integration.
+requires_network: true
 install:
   type: binary
   source: https://github.com/nlink-jp/swrite/releases

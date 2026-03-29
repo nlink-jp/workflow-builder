@@ -3,6 +3,7 @@ version: "0.1.0"
 description: |
   News collection agent. Collects, tags, summarizes, translates, and delivers
   news articles via Gemini. Stores in SQLite + JSONL.
+requires_network: true
 install:
   type: python
   source: https://github.com/nlink-jp/news-collector

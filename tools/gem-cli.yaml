@@ -4,6 +4,7 @@ description: |
   Gemini CLI client for Vertex AI. Sends prompts to Google Gemini and returns
   the response. Supports text, images, PDFs, audio, and video as input.
   Includes prompt injection protection for untrusted data.
+requires_network: true
 install:
   type: binary
   source: https://github.com/nlink-jp/gem-cli/releases
