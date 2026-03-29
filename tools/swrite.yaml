@@ -72,3 +72,25 @@ pipes_well_with:
   - news-collector   # curate output → Slack
   - json-to-table    # table → Slack
   - md-to-slack      # Markdown → Block Kit → Slack
+
+idempotency:
+  strategy: none
+  description: Each invocation posts a new message (not idempotent by nature)
+  existing_output: not-applicable
+
+input_schema:
+  blocks:
+    format: json-array
+    description: Slack Block Kit blocks array (bare [...] or {"blocks":[...]})
+  payload:
+    format: json-object
+    fields:
+      - name: blocks
+        type: array
+        optional: true
+      - name: attachments
+        type: array
+        optional: true
+      - name: text
+        type: string
+        optional: true

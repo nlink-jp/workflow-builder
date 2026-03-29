@@ -101,3 +101,17 @@ pipes_well_with:
   - swrite      # post results to Slack
   - json-to-table  # format JSON as table
   - rex         # extract fields from text output
+
+idempotency:
+  strategy: check-before-write
+  existing_output: skip
+
+output_schema:
+  text:
+    format: plain-text
+  json:
+    format: json-object
+    description: Structure depends on prompt/schema
+  jsonl:
+    format: jsonl
+    description: One JSON object per line (batch mode)

@@ -113,3 +113,31 @@ examples:
 pipes_well_with:
   - swrite     # curate/notify output → Slack posting
   - jq         # filter/transform JSONL output
+
+idempotency:
+  collect:
+    strategy: dedup-by-id
+    description: URL hash deduplication; re-collecting same date range is safe
+  process:
+    strategy: skip-processed
+    description: Skips articles where processed_at is not NULL
+
+output_schema:
+  curate:
+    format: jsonl
+    fields:
+      - name: blocks
+        type: array
+        description: Slack Block Kit blocks array
+    notes: Each line is a complete Block Kit message for one article
+  notify:
+    format: jsonl
+    fields:
+      - name: blocks
+        type: array
+
+input_schema:
+  process:
+    requires: collect has been run (articles exist in DB)
+  curate:
+    requires: process has been run (tags and summaries exist)

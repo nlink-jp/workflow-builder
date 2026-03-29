@@ -50,7 +50,34 @@ maintain. Silent data loss in pipe chains is hard to detect.
   disposable artifacts. When the task changes, re-compile rather than
   hand-edit. Version the task description, not the script.
 
-**Open question — Intermediate Representation (IR):**
+**Idempotency enforcement:**
+
+Rather than relying solely on LLM prompts to produce idempotent scripts,
+the orchestrator injects structural idempotency patterns at code generation
+time. The tool registry provides per-tool idempotency hints:
+
+```yaml
+# In tool registry
+idempotency:
+  strategy: dedup-by-id    # or: check-before-write, atomic-replace, append-safe
+  existing_output: skip    # skip | overwrite | error
+```
+
+The code generator uses these hints to wrap tool invocations:
+
+```bash
+# Auto-injected: check-before-write pattern
+if [ ! -f /workspace/output/report.json ]; then
+  gem-cli "Analyze this" --image input.png --format json     > /workspace/output/report.json
+else
+  echo "[skip] report.json already exists" >&2
+fi
+```
+
+This removes idempotency from "things the LLM might forget" and makes it
+a structural guarantee of the code generator.
+
+
 
 A reviewer suggested generating a YAML/JSON workflow definition first
 (similar to GitHub Actions), then transpiling to Bash deterministically.
@@ -107,6 +134,24 @@ are hard to express in YAML.
 
   This lets the orchestrator validate pipe compatibility at plan time,
   before generating any code.
+
+- **Static pipe validation**: at plan time, before any code is generated,
+  the orchestrator checks that each pipe stage's `output_schema` is
+  compatible with the next stage's `input_schema`. Mismatches are flagged
+  immediately:
+
+  ```
+  [PLAN ERROR] news-collector curate outputs JSONL with {blocks: [...]},
+  but swrite --format blocks expects a bare JSON array.
+  Suggested fix: pipe through 'jq .blocks[]'
+  ```
+
+  This eliminates the most common class of "works in isolation but breaks
+  in the pipeline" errors — without executing anything.
+
+- **Contract versioning**: schemas include the tool version they describe.
+  When a tool is updated, the orchestrator can detect outdated contracts
+  and prompt for re-validation.
 
 ---
 
