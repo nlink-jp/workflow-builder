@@ -1,0 +1,9 @@
+dist/
+*.test
+*.out
+.env
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo

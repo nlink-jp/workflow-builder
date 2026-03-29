@@ -1,0 +1,73 @@
+name: swrite
+version: "0.3.0"
+description: |
+  Bot-oriented Slack posting CLI. Posts text, Block Kit messages, or files
+  to Slack channels and DMs. Designed for pipeline integration.
+install:
+  type: binary
+  source: https://github.com/nlink-jp/swrite/releases
+  languages: [go]
+
+input:
+  stdin: Message body (text, Block Kit JSON, or payload JSON)
+  args:
+    - name: message
+      position: 1
+      description: Message text (alternative to stdin)
+
+output:
+  stdout: (none)
+  stderr: "Message posted." on success
+
+flags:
+  - name: -c, --channel
+    type: string
+    description: "Destination channel (#name or ID)"
+  - name: --user
+    type: string
+    description: Send as DM to user ID
+  - name: --format
+    type: enum
+    values: [text, blocks, payload]
+    default: text
+    description: Message format
+  - name: --no-unfurl
+    type: bool
+    description: Disable link previews
+  - name: -f, --from-file
+    type: filepath
+    description: Read message body from file
+  - name: --stream
+    type: bool
+    description: Batch stdin lines every 3 seconds
+  - name: -u, --username
+    type: string
+    description: Override display name
+  - name: -i, --icon-emoji
+    type: string
+    description: Override icon emoji
+
+env:
+  - name: SWRITE_MODE
+    required: false
+    description: "Set to 'server' for env-only config"
+  - name: SWRITE_TOKEN
+    required: true (server mode)
+    description: Slack bot token
+  - name: SWRITE_CHANNEL
+    required: false
+    description: Default channel (server mode)
+
+examples:
+  - description: Post a text message
+    command: echo "deploy complete" | swrite post -c "#ops"
+  - description: Post Block Kit JSON
+    command: cat blocks.json | swrite post --format blocks -c "#alerts"
+  - description: Post with no link previews
+    command: echo "$MSG" | swrite post --format blocks --no-unfurl -c "#news"
+
+pipes_well_with:
+  - gem-cli          # LLM output → Slack
+  - news-collector   # curate output → Slack
+  - json-to-table    # table → Slack
+  - md-to-slack      # Markdown → Block Kit → Slack

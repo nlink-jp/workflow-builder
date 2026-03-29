@@ -1,0 +1,102 @@
+name: gem-cli
+version: "0.2.0"
+description: |
+  Gemini CLI client for Vertex AI. Sends prompts to Google Gemini and returns
+  the response. Supports text, images, PDFs, audio, and video as input.
+  Includes prompt injection protection for untrusted data.
+install:
+  type: binary
+  source: https://github.com/nlink-jp/gem-cli/releases
+  languages: [go]
+
+input:
+  stdin: |
+    Text data. Automatically wrapped in nonce-tagged XML for prompt injection
+    protection (disable with --no-safe-input). Use {{DATA_TAG}} in system
+    prompt to reference the isolation tag.
+  args:
+    - name: prompt
+      position: 1
+      description: User prompt text (can also use -p flag)
+
+output:
+  stdout: LLM response text, JSON object, or JSONL (one per line in batch mode)
+  stderr: Warnings, progress, debug logs
+
+flags:
+  - name: -p, --prompt
+    type: string
+    description: User prompt text
+  - name: -f, --file
+    type: filepath
+    description: "Input file path (read as text; use - for stdin)"
+  - name: -s, --system-prompt
+    type: string
+    description: System prompt text
+  - name: -S, --system-prompt-file
+    type: filepath
+    description: System prompt from file
+  - name: -m, --model
+    type: string
+    default: gemini-2.5-flash
+    description: Model name
+  - name: --image
+    type: filepath[]
+    description: Image file (can repeat)
+  - name: --attach
+    type: filepath[]
+    description: "Attach file: PDF, audio, video (can repeat)"
+  - name: --stream
+    type: bool
+    description: Token-by-token streaming output
+  - name: --batch
+    type: bool
+    description: "Process stdin line by line, one API call per line"
+  - name: --grounding
+    type: bool
+    description: Enable Google Search Grounding
+  - name: --format
+    type: enum
+    values: [text, json, jsonl]
+    default: text
+    description: Output format
+  - name: --json-schema
+    type: filepath
+    description: JSON Schema file (implies --format json)
+  - name: --no-safe-input
+    type: bool
+    description: Disable automatic data isolation
+  - name: -q, --quiet
+    type: bool
+    description: Suppress warnings on stderr
+
+env:
+  - name: GOOGLE_CLOUD_PROJECT
+    required: true
+    description: GCP project ID
+  - name: GEM_CLI_MODEL
+    required: false
+    description: Default model name
+
+examples:
+  - description: Ask a question
+    command: gem-cli "What is the capital of Japan?"
+  - description: Analyze an image
+    command: gem-cli "Describe this image" --image photo.jpg
+  - description: Extract structured data from piped input
+    command: |
+      echo "Alice, 34, engineer" | gem-cli \
+        -s "Extract from <{{DATA_TAG}}>. Return JSON: {name, age, role}" \
+        --format json
+  - description: Batch classification
+    command: |
+      cat items.txt | gem-cli --batch --format jsonl \
+        -s "Classify as: food, vehicle, animal, other."
+  - description: Web search grounding
+    command: gem-cli --grounding "Latest CVE for Log4j"
+
+pipes_well_with:
+  - jq          # parse/filter JSON output
+  - swrite      # post results to Slack
+  - json-to-table  # format JSON as table
+  - rex         # extract fields from text output

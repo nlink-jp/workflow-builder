@@ -1,0 +1,114 @@
+name: news-collector
+version: "0.1.0"
+description: |
+  News collection agent. Collects, tags, summarizes, translates, and delivers
+  news articles via Gemini. Stores in SQLite + JSONL.
+install:
+  type: python
+  source: https://github.com/nlink-jp/news-collector
+  command: uv tool install .
+
+input:
+  stdin: (not used directly; uses --db for state)
+  args: []
+
+output:
+  stdout: |
+    - collect/process: (none, results go to DB)
+    - notify/curate: JSONL (one Block Kit JSON per line)
+    - serve: starts HTTP server
+  stderr: Progress messages
+
+subcommands:
+  - name: collect
+    description: Collect news articles via Gemini + Google Search Grounding
+    flags:
+      - name: --topics, -t
+        type: filepath
+        description: TOML file with topics and keywords
+      - name: --genre, -g
+        type: string
+        default: cybersecurity
+        description: Single genre (alternative to --topics)
+      - name: --from
+        type: date
+        description: Start date (YYYY-MM-DD, default yesterday)
+      - name: --to
+        type: date
+        description: End date (YYYY-MM-DD, default yesterday)
+      - name: --db
+        type: filepath
+        default: news.db
+      - name: --jsonl
+        type: filepath
+        description: Also append to JSONL file
+
+  - name: process
+    description: Tag, summarize, and translate collected articles
+    flags:
+      - name: --topics, -t
+        type: filepath
+        description: TOML file (reads languages field)
+      - name: --languages, -l
+        type: string
+        description: "Comma-separated target languages (e.g. ja,ko)"
+      - name: --db
+        type: filepath
+        default: news.db
+      - name: --force
+        type: bool
+        description: Re-process already processed articles
+
+  - name: curate
+    description: Generate analyst commentary + Block Kit JSON output
+    flags:
+      - name: --db
+        type: filepath
+        default: news.db
+      - name: --lang, -l
+        type: string
+        description: Language for commentary and translations
+      - name: --limit
+        type: int
+        description: Max articles (0 = all)
+
+  - name: notify
+    description: Output articles as Block Kit JSON (no commentary)
+    flags:
+      - name: --db
+        type: filepath
+        default: news.db
+      - name: --lang, -l
+        type: string
+
+  - name: serve
+    description: Start local web UI
+    flags:
+      - name: --db
+        type: filepath
+        default: news.db
+      - name: --port, -p
+        type: int
+        default: 8080
+
+env:
+  - name: GOOGLE_CLOUD_PROJECT
+    required: true
+  - name: GOOGLE_CLOUD_LOCATION
+    required: false
+    default: us-central1
+
+examples:
+  - description: Daily news collection and posting workflow
+    command: |
+      news-collector collect --topics topics.toml --db news.db
+      news-collector process --topics topics.toml --db news.db
+      news-collector curate --db news.db --lang ja \
+        | while IFS= read -r line; do
+            printf '%s' "$line" | swrite post --format blocks --no-unfurl -c "#news"
+            sleep 1
+          done
+
+pipes_well_with:
+  - swrite     # curate/notify output → Slack posting
+  - jq         # filter/transform JSONL output
